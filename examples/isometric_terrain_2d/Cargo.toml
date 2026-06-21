@@ -1,0 +1,8 @@
+[package]
+name = "isometric_terrain_2d"
+version = "0.1.0"
+edition = "2021"
+description = "Bevy example: 2D isometric terrain rendering"
+
+[dependencies]
+bevy = { workspace = true }

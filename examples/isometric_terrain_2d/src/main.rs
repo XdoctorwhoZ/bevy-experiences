@@ -13,10 +13,12 @@
 //! - WASD / Arrow keys: Move camera
 //! - Mouse Wheel: Zoom in/out
 //! - Space: Cycle between maps
+//! - P: Randomize tile at position (5, 5)
 
 use bevy::prelude::*;
 use bevy::input::mouse::AccumulatedMouseScroll;
 use bevy_ecs_tiled::prelude::*;
+use bevy_ecs_tilemap::prelude::{TilePos, TileStorage, TileTextureIndex, TileBundle, TilemapId};
 
 fn main() {
     App::new()
@@ -27,7 +29,7 @@ fn main() {
         .add_plugins(TiledPlugin::default())
         // Add our systems and run the app!
         .add_systems(Startup, startup)
-        .add_systems(Update, (camera_movement, cycle_maps))
+        .add_systems(Update, (camera_movement, cycle_maps, randomize_tile))
         .run();
 }
 
@@ -68,7 +70,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // Add UI text
     commands.spawn((
-        Text2d::new("Isometric Terrain 2D\nbevy_ecs_tiled\nWASD: Move Camera\nMouse Wheel: Zoom\nSpace: Switch Map"),
+        Text2d::new("Isometric Terrain 2D\nbevy_ecs_tiled\nWASD: Move Camera\nMouse Wheel: Zoom\nSpace: Switch Map\nP: Randomize Tile"),
         Transform::from_xyz(10.0, 10.0, 100.0),
     ));
 }
@@ -101,6 +103,47 @@ fn cycle_maps(
                 y_sort: true,
             },
         ));
+    }
+}
+
+/// Randomize tile at a specific position when P is pressed
+/// This demonstrates dynamic tile modification at runtime
+fn randomize_tile(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    mut tilemap_query: Query<(Entity, &mut TileStorage)>,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyP) {
+        // Find the tilemap entity and its storage
+        for (tilemap_entity, mut tile_storage) in &mut tilemap_query {
+            // Target position to modify (within the 10x10 finite_diamond map)
+            let target_pos = TilePos { x: 5, y: 5 };
+            
+            if let Some(tile_entity) = tile_storage.get(&target_pos) {
+                // Despawn the old tile
+                commands.entity(tile_entity).despawn();
+                
+                // Remove from storage
+                tile_storage.remove(&target_pos);
+                
+                // Get a random tile index (0-4 based on the kenney-sketch-desert tileset)
+                // The tileset has 5 tiles with IDs 0-4
+                let new_tile_index = (rand::random::<f32>() * 5.0) as u32;
+                
+                // Spawn a new tile with the new texture index
+                commands.spawn(TileBundle {
+                    position: target_pos,
+                    tilemap_id: TilemapId(tilemap_entity),
+                    texture_index: TileTextureIndex(new_tile_index),
+                    ..Default::default()
+                });
+                
+                println!("Replaced tile at position ({}, {}) with random index {}", 
+                         target_pos.x, target_pos.y, new_tile_index);
+            } else {
+                println!("No tile found at position (5, 5)");
+            }
+        }
     }
 }
 

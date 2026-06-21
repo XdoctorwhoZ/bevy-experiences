@@ -116,32 +116,47 @@ fn randomize_tile(
     if keyboard_input.just_pressed(KeyCode::KeyP) {
         // Find the tilemap entity and its storage
         for (tilemap_entity, mut tile_storage) in &mut tilemap_query {
-            // Target position to modify (within the 10x10 finite_diamond map)
-            let target_pos = TilePos { x: 5, y: 5 };
+            // Try to find the first tile in the storage
+            // Iterate through all possible positions in the storage
+            let size = tile_storage.size;
+            let mut found = false;
             
-            if let Some(tile_entity) = tile_storage.get(&target_pos) {
-                // Despawn the old tile
-                commands.entity(tile_entity).despawn();
-                
-                // Remove from storage
-                tile_storage.remove(&target_pos);
-                
-                // Get a random tile index (0-4 based on the kenney-sketch-desert tileset)
-                // The tileset has 5 tiles with IDs 0-4
-                let new_tile_index = (rand::random::<f32>() * 5.0) as u32;
-                
-                // Spawn a new tile with the new texture index
-                commands.spawn(TileBundle {
-                    position: target_pos,
-                    tilemap_id: TilemapId(tilemap_entity),
-                    texture_index: TileTextureIndex(new_tile_index),
-                    ..Default::default()
-                });
-                
-                println!("Replaced tile at position ({}, {}) with random index {}", 
-                         target_pos.x, target_pos.y, new_tile_index);
-            } else {
-                println!("No tile found at position (5, 5)");
+            for x in 0..size.x {
+                for y in 0..size.y {
+                    let target_pos = TilePos { x, y };
+                    
+                    if let Some(tile_entity) = tile_storage.get(&target_pos) {
+                        // Despawn the old tile
+                        commands.entity(tile_entity).despawn();
+                        
+                        // Remove from storage
+                        tile_storage.remove(&target_pos);
+                        
+                        // Get a random tile index (0-4 based on the kenney-sketch-desert tileset)
+                        // The tileset has 5 tiles with IDs 0-4
+                        let new_tile_index = (rand::random::<f32>() * 5.0) as u32;
+                        
+                        // Spawn a new tile with the new texture index
+                        commands.spawn(TileBundle {
+                            position: target_pos,
+                            tilemap_id: TilemapId(tilemap_entity),
+                            texture_index: TileTextureIndex(new_tile_index),
+                            ..Default::default()
+                        });
+                        
+                        println!("Replaced tile at position ({}, {}) with random index {}", 
+                                 target_pos.x, target_pos.y, new_tile_index);
+                        found = true;
+                        break;
+                    }
+                }
+                if found {
+                    break;
+                }
+            }
+            
+            if !found {
+                println!("No tiles found in storage (size: {}x{})", size.x, size.y);
             }
         }
     }

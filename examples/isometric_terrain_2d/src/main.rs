@@ -1,7 +1,8 @@
-//! Isometric Terrain 2D Example
+//! Isometric Terrain 2D Example with bevy_ecs_tiled
 //!
-//! A simple 2D isometric terrain rendering example using Bevy.
-//! 
+//! A 2D isometric terrain rendering example using Bevy and bevy_ecs_tiled.
+//! This example loads a Tiled map file (.tmx) with isometric orientation.
+//!
 //! To run:
 //! ```bash
 //! cd examples/isometric_terrain_2d
@@ -11,176 +12,107 @@
 //! Controls:
 //! - WASD / Arrow keys: Move camera
 //! - Mouse Wheel: Zoom in/out
+//! - Space: Cycle between maps
 
 use bevy::prelude::*;
-use bevy::render::camera::ScalingMode;
+use bevy::input::mouse::AccumulatedMouseScroll;
+use bevy_ecs_tiled::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Isometric Terrain 2D".into(),
-                resolution: (800.0, 600.0).into(),
-                resizable: true,
-                ..default()
-            }),
-            ..default()
-        }))
-        .add_systems(Startup, setup)
-        .add_systems(Update, camera_movement)
+        // Bevy default plugins: prevent blur effect by changing default sampling
+        .add_plugins(DefaultPlugins.build().set(ImagePlugin::default_nearest()))
+        // Add bevy_ecs_tiled plugin: bevy_ecs_tilemap::TilemapPlugin will
+        // be automatically added as well if it's not already done
+        .add_plugins(TiledPlugin::default())
+        // Add our systems and run the app!
+        .add_systems(Startup, startup)
+        .add_systems(Update, (camera_movement, cycle_maps))
         .run();
 }
 
-/// Terrain configuration
-const TERRAIN_WIDTH: usize = 20;
-const TERRAIN_HEIGHT: usize = 15;
-const TILE_SIZE: f32 = 64.0;
-
-/// Isometric tile dimensions
-const TILE_HALF_WIDTH: f32 = TILE_SIZE / 2.0;
-const TILE_HALF_HEIGHT: f32 = TILE_SIZE / 2.0;
-
-/// Colors for different terrain types
-const GRASS_COLOR: Color = Color::srgb(0.2, 0.6, 0.2);
-const WATER_COLOR: Color = Color::srgb(0.1, 0.3, 0.8);
-const SAND_COLOR: Color = Color::srgb(0.8, 0.7, 0.4);
-const MOUNTAIN_COLOR: Color = Color::srgb(0.4, 0.4, 0.4);
-
-/// Terrain tile type
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum TerrainType {
-    Grass,
-    Water,
-    Sand,
-    Mountain,
+/// Component to track which map is currently loaded
+#[derive(Resource)]
+struct CurrentMap {
+    index: usize,
+    maps: Vec<(String, String)>, // (path, description)
 }
 
-impl TerrainType {
-    fn color(&self) -> Color {
-        match self {
-            TerrainType::Grass => GRASS_COLOR,
-            TerrainType::Water => WATER_COLOR,
-            TerrainType::Sand => SAND_COLOR,
-            TerrainType::Mountain => MOUNTAIN_COLOR,
-        }
-    }
-}
-
-/// Generate terrain data with some pattern
-fn generate_terrain() -> Vec<Vec<TerrainType>> {
-    let mut terrain = vec![vec![TerrainType::Grass; TERRAIN_WIDTH]; TERRAIN_HEIGHT];
-    
-    // Add some water in the corners
-    for y in 0..3 {
-        for x in 0..5 {
-            terrain[y][x] = TerrainType::Water;
-        }
-    }
-    
-    // Add some sand near water
-    for y in 2..5 {
-        for x in 4..8 {
-            terrain[y][x] = TerrainType::Sand;
-        }
-    }
-    
-    // Add some mountains
-    for y in 8..12 {
-        for x in 10..15 {
-            terrain[y][x] = TerrainType::Mountain;
-        }
-    }
-    
-    terrain
-}
-
-/// Convert isometric screen coordinates to world coordinates
-fn isometric_to_world(iso_x: f32, iso_y: f32) -> (f32, f32) {
-    let world_x = (iso_x - iso_y) / 2.0;
-    let world_y = (iso_x + iso_y) / 2.0;
-    (world_x, world_y)
-}
-
-/// Setup the scene
-fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-) {
+/// Setup the scene with a Tiled map
+fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Spawn camera
-    commands.spawn(Camera2dBundle {
-        projection: OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical(10.0),
-            ..default()
-        },
-        transform: Transform::from_xyz(
-            TERRAIN_WIDTH as f32 * TILE_HALF_WIDTH,
-            TERRAIN_HEIGHT as f32 * TILE_HALF_HEIGHT,
-            0.0,
-        ),
-        ..default()
-    });
+    commands.spawn(Camera2d);
 
-    // Generate terrain
-    let terrain = generate_terrain();
-    
-    // Spawn terrain tiles
-    for y in 0..TERRAIN_HEIGHT {
-        for x in 0..TERRAIN_WIDTH {
-            let terrain_type = terrain[y][x];
-            
-            // Calculate isometric position
-            let iso_x = (x as f32 - y as f32) * TILE_HALF_WIDTH;
-            let iso_y = (x as f32 + y as f32) * TILE_HALF_HEIGHT;
-            
-            // Convert to world coordinates
-            let (world_x, world_y) = isometric_to_world(iso_x, iso_y);
-            
-            // Spawn tile as a rectangle
-            commands.spawn(SpriteBundle {
-                sprite: Sprite {
-                    color: terrain_type.color(),
-                    custom_size: Some(Vec2::new(TILE_SIZE, TILE_SIZE)),
-                    ..default()
-                },
-                transform: Transform::from_xyz(world_x, world_y, 0.0),
-                ..default()
-            });
-            
-            // Add a slight border to make tiles visible
-            commands.spawn(SpriteBundle {
-                sprite: Sprite {
-                    color: Color::BLACK,
-                    custom_size: Some(Vec2::new(TILE_SIZE, TILE_SIZE)),
-                    ..default()
-                },
-                transform: Transform::from_xyz(world_x, world_y, 0.1),
-                ..default()
-            });
+    // List of available maps
+    let maps = vec![
+        ("maps/isometric/finite_diamond.tmx".to_string(), "Finite Diamond Isometric Map".to_string()),
+        ("maps/isometric/infinite_diamond.tmx".to_string(), "Infinite Diamond Isometric Map".to_string()),
+    ];
+
+    // Clone maps for the resource
+    let maps_clone = maps.clone();
+
+    // Insert current map resource
+    commands.insert_resource(CurrentMap { index: 0, maps: maps_clone });
+
+    // Load the first map
+    let map_handle: Handle<TiledMapAsset> = asset_server.load(&maps[0].0);
+    commands.spawn((
+        TiledMap(map_handle),
+        TilemapAnchor::Center,
+        TilemapRenderSettings {
+            render_chunk_size: UVec2::new(64, 1),
+            y_sort: true,
+        },
+    ));
+
+    // Add UI text
+    commands.spawn((
+        Text2d::new("Isometric Terrain 2D\nbevy_ecs_tiled\nWASD: Move Camera\nMouse Wheel: Zoom\nSpace: Switch Map"),
+        Transform::from_xyz(10.0, 10.0, 100.0),
+    ));
+}
+
+/// Cycle through available maps
+fn cycle_maps(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut current_map: ResMut<CurrentMap>,
+    asset_server: Res<AssetServer>,
+    mut commands: Commands,
+    map_query: Query<Entity, With<TiledMap>>,
+) {
+    if keyboard_input.just_pressed(KeyCode::Space) {
+        // Despawn current map
+        for entity in &map_query {
+            commands.entity(entity).despawn();
         }
-    }
-    
-    // Add some UI text
-    commands.spawn(Text2dBundle {
-        text: Text::from_section(
-            "Isometric Terrain 2D\nWASD: Move Camera\nMouse Wheel: Zoom",
-            TextStyle {
-                font: asset_server.load("embedded://bevy/default_font.ttf"),
-                font_size: 24.0,
-                color: Color::WHITE,
+        
+        // Move to next map
+        current_map.index = (current_map.index + 1) % current_map.maps.len();
+        let path = &current_map.maps[current_map.index].0;
+        
+        // Load new map
+        let map_handle: Handle<TiledMapAsset> = asset_server.load(path);
+        commands.spawn((
+            TiledMap(map_handle),
+            TilemapAnchor::Center,
+            TilemapRenderSettings {
+                render_chunk_size: UVec2::new(64, 1),
+                y_sort: true,
             },
-        ),
-        transform: Transform::from_xyz(10.0, 10.0, 100.0),
-        ..default()
-    });
+        ));
+    }
 }
 
 /// Camera movement system
 fn camera_movement(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mouse_wheel: Res<Events<MouseWheel>>,
-    mut query: Query<(&mut Transform, &mut OrthographicProjection), With<Camera2d>>,
+    mouse_scroll: Res<AccumulatedMouseScroll>,
+    mut camera_query: Query<&mut Transform, With<Camera2d>>,
+    mut projection_query: Query<&mut Projection, With<Camera2d>>,
 ) {
-    for (mut transform, mut projection) in &mut query {
+    // Handle movement
+    for mut transform in &mut camera_query {
         let mut direction = Vec3::ZERO;
         
         if keyboard_input.pressed(KeyCode::ArrowLeft) || keyboard_input.pressed(KeyCode::KeyA) {
@@ -199,11 +131,14 @@ fn camera_movement(
         if direction != Vec3::ZERO {
             transform.translation += direction.normalize() * 500.0 * 0.016;
         }
-        
-        // Handle zoom
-        for event in mouse_wheel.read() {
-            let zoom_factor = 1.0 - event.y * 0.1;
-            projection.scale *= zoom_factor;
+    }
+    
+    // Handle zoom
+    for mut projection in &mut projection_query {
+        if let Projection::Orthographic(ref mut orthographic) = *projection {
+            let zoom_factor = 1.0 - mouse_scroll.delta.y * 0.1;
+            orthographic.scale *= zoom_factor;
+            orthographic.scale = orthographic.scale.clamp(0.1, 10.0);
         }
     }
 }

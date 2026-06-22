@@ -1,0 +1,12 @@
+[package]
+name = "isometric_terrain_2d"
+version = "0.1.0"
+edition = "2021"
+description = "Bevy example: 2D isometric terrain rendering using bevy_ecs_tiled"
+
+[dependencies]
+# Using Bevy 0.18 for compatibility with bevy_ecs_tiled
+bevy = "0.18"
+bevy_ecs_tiled = "0.11"
+bevy_ecs_tilemap = "0.18"
+rand = "0.8"

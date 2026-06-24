@@ -17,6 +17,7 @@ cargo run
 | Exemple | Description | Bevy | Statut |
 |---------|-------------|------|--------|
 | [isometric_terrain_2d](./examples/isometric_terrain_2d) | Rendu de terrain 2D isométrique avec différents types de tuiles | 0.19 | ✅ Complet |
+| [move_player](./examples/move_player) | Déplacement de personnage 2D avec animations Aseprite (bevy_aseprite_ultra) | 0.19 | ✅ Complet |
 
 ## Structure du projet
 
@@ -30,6 +31,12 @@ bevy-experiences/
     │   ├── src/
     │   │   └── main.rs
     │   └── README.md
+    ├── move_player/
+    │   ├── Cargo.toml
+    │   ├── src/
+    │   │   └── main.rs
+    │   └── assets/
+    │       └── player.aseprite
     └── <futur_exemple>/
         ├── Cargo.toml
         ├── src/
